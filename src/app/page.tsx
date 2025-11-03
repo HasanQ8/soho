@@ -1,19 +1,19 @@
-// app/soho/page.tsx
 import type { Metadata } from "next";
 import Image from "next/image";
-import { redirect } from "next/navigation";
+import Script from "next/script";
+import SohoLeadForm from "../components/SohoLeadForm"; // Client Component with useActionState/useFormStatus
 
 // ---------- SEO ----------
 export const metadata: Metadata = {
   title: "SOHO Solutions | stc – Small Office / Home Office (Revamp)",
   description:
     "Request SOHO services like Fiber Link, Business Professional, Maktabi, Toll-free 800, UAN 9200, DIA and more. Fast install, simple bundles, priority support.",
-  alternates: { canonical: "/soho" },
+  alternates: { canonical: "/" },
   openGraph: {
     title: "SOHO Solutions | stc – Small Office / Home Office (Revamp)",
     description:
       "Request SOHO services—Fiber Link, Business Professional, Maktabi, DIA and more—with fast install and priority support.",
-    url: "https://www.example.com/soho",
+    url: "https://www.example.com/",
     siteName: "stc (revamp)",
     images: [{ url: "/soho/Soho.png", width: 1200, height: 630 }],
     locale: "en_US",
@@ -23,9 +23,10 @@ export const metadata: Metadata = {
 
 // ---------- Settings (colors) ----------
 const BRAND = "#4f008c"; // main stc color
-const CTA = "#ff375e"; // buttons color
+const CTA = "#ff375e"; // buttons
+const SUCCESS = "#16a34a"; // success green
 
-// ---------- Data (swap to CMS/API later) ----------
+// ---------- Data ----------
 const listedServicesList = [
   {
     title: "Fiber Link",
@@ -69,16 +70,8 @@ const listedServicesList = [
   },
 ];
 
-const listedServices = [
-  "Fiber Link",
-  "Business Professional",
-  "Maktabi packages",
-  "Universal Access Number 9200",
-  "Toll free service 800",
-  "Dedicated Internet Access (DIA)",
-  "Maktabi 5G (Mazaya Platform)",
-  "Sunmi POS with 5GB SIM",
-];
+// titles-only array for checkboxes in the form
+const listedServices = listedServicesList.map((s) => s.title);
 
 const plans = [
   {
@@ -221,44 +214,47 @@ function Icon({
   }
 }
 
-// ---------- Server Action (handles the form) ----------
-async function submitLead(formData: FormData) {
+// ---------- Server Action (state-returning for useActionState) ----------
+export async function submitLead(
+  prevState: { ok: boolean; error?: string | null },
+  formData: FormData
+) {
   "use server";
 
-  // Honeypot (should be empty). If bots fill it, we silently drop.
-  if (String(formData.get("company_website") || "").trim() !== "") {
-    redirect("/soho?submitted=1");
+  // Honeypot
+  if ((formData.get("hp_trap") as string)?.trim()) {
+    return { ok: true as const, error: null };
   }
 
   const name = String(formData.get("name") || "");
   const phone = String(formData.get("phone") || "");
   const email = String(formData.get("email") || "");
-  const services = formData.getAll("services").map(String); // checkboxes
+  const plan = String(formData.get("plan") || "");
+  const services = formData.getAll("services").map(String);
   const other = String(formData.get("other") || "");
   const notes = String(formData.get("notes") || "");
 
-  // TODO: validate & persist (DB/CRM) or email. You can also add reCAPTCHA v3 verification here.
+  if (!name || !phone || !email) {
+    return {
+      ok: false as const,
+      error: "Please fill name, phone and work email.",
+    };
+  }
 
-  redirect("/soho?submitted=1");
+  // TODO: Persist to DB/CRM or send email (includes plan + services)
+  return { ok: true as const, error: null };
 }
 
 // ---------- Page ----------
-export default function SohoPage({
-  searchParams,
-}: {
-  searchParams?: { [key: string]: string | string[] | undefined };
-}) {
-  const submitted = searchParams?.submitted === "1";
-
+export default function Home() {
   return (
     <main className="min-h-screen bg-white text-black">
       {/* HERO */}
       <section className="relative overflow-hidden">
-        {/* Brand gradient (non-white → use white text inside) */}
         <div
           className="absolute inset-0 -z-10"
           style={{
-            backgroundImage: `linear-gradient(135deg, ${BRAND}1A, ${BRAND}33)`, // light brand tint
+            backgroundImage: `linear-gradient(135deg, ${BRAND}1A, ${BRAND}33)`,
           }}
         />
         <div className="mx-auto max-w-7xl px-6 py-20 lg:flex lg:items-center lg:gap-12">
@@ -311,7 +307,7 @@ export default function SohoPage({
             style={{ backgroundColor: "#ffffffb3" }}
           >
             <Image
-              src="/soho/hero-dashboard.png"
+              src="/soho/Soho.png"
               alt="SOHO dashboard preview"
               fill
               sizes="(min-width: 1024px) 480px, 100vw"
@@ -322,7 +318,7 @@ export default function SohoPage({
         </div>
       </section>
 
-      {/* BENEFITS (white background → black text) */}
+      {/* BENEFITS */}
       <section
         className="mx-auto max-w-7xl px-6 py-14"
         aria-labelledby="benefits-heading"
@@ -355,7 +351,7 @@ export default function SohoPage({
         </div>
       </section>
 
-      {/* SERVICES PREVIEW (informational list; white background) */}
+      {/* SERVICES — titles + descriptions */}
       <section
         id="services"
         className="mx-auto max-w-7xl px-6 py-14"
@@ -372,6 +368,7 @@ export default function SohoPage({
           Select the services you need in the form below—we’ll tailor the bundle
           for you.
         </p>
+
         <ul className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {listedServicesList.map((s) => (
             <li
@@ -392,7 +389,7 @@ export default function SohoPage({
         </ul>
       </section>
 
-      {/* PLANS (white background) */}
+      {/* PLANS */}
       <section
         id="plans"
         className="mx-auto max-w-7xl px-6 py-14"
@@ -406,9 +403,9 @@ export default function SohoPage({
           Plans that fit your business
         </h2>
         <p className="mt-2" style={{ color: "#374151" }}>
-          All plans include business lines, high-speed internet and self-serve
-          portal access.
+          Pick a plan to pre-fill the form, or change it in the form anytime.
         </p>
+
         <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {plans.map((p) => (
             <article
@@ -450,8 +447,10 @@ export default function SohoPage({
                 ))}
               </ul>
               <div className="mt-6">
+                {/* Click → save plan + broadcast; hash scroll proceeds to #contact */}
                 <a
                   href="#contact"
+                  data-plan={p.name}
                   className="inline-flex w-full items-center justify-center rounded-xl px-4 py-3 focus:outline-none focus:ring-2"
                   style={{ backgroundColor: CTA, color: "#fff" }}
                 >
@@ -466,7 +465,7 @@ export default function SohoPage({
         </div>
       </section>
 
-      {/* CONTACT (colored background → white text) */}
+      {/* CONTACT — form lives in Client Component (useActionState/useFormStatus) */}
       <section id="contact" className="relative mx-auto max-w-7xl px-6 pb-24">
         <div
           className="overflow-hidden rounded-3xl"
@@ -484,157 +483,14 @@ export default function SohoPage({
                 you shortly.
               </p>
 
-              {/* Submission feedback */}
-              {submitted ? (
-                <div
-                  className="mt-6 rounded-xl p-4"
-                  style={{ backgroundColor: "#ffffff1a", color: "#fff" }}
-                >
-                  <p className="font-semibold">
-                    Thanks! We’ve received your request.
-                  </p>
-                  <p style={{ color: "#f5d9ff" }} className="text-sm">
-                    Our team will reach out soon.
-                  </p>
-                </div>
-              ) : (
-                <form
-                  className="mt-6 grid gap-3 sm:max-w-md"
-                  action={submitLead}
-                >
-                  {/* Honeypot (hidden) */}
-                  <div aria-hidden className="hidden">
-                    <label htmlFor="company_website">Company Website</label>
-                    <input id="company_website" name="company_website" />
-                  </div>
-
-                  {/* Inputs: white bg → black text for readability (WCAG AA) */}
-                  <label className="sr-only" htmlFor="name">
-                    Name
-                  </label>
-                  <input
-                    id="name"
-                    name="name"
-                    placeholder="Full name"
-                    required
-                    className="rounded-xl border-0 px-4 py-3 placeholder-gray-600 focus:outline-none focus:ring-2"
-                    style={{
-                      backgroundColor: "#fff",
-                      color: "#000",
-                      boxShadow: `inset 0 0 0 1px ${"#ffffff4d"}`,
-                    }}
-                  />
-
-                  <label className="sr-only" htmlFor="phone">
-                    Phone
-                  </label>
-                  <input
-                    id="phone"
-                    name="phone"
-                    placeholder="Phone"
-                    required
-                    className="rounded-xl border-0 px-4 py-3 placeholder-gray-600 focus:outline-none focus:ring-2"
-                    style={{
-                      backgroundColor: "#fff",
-                      color: "#000",
-                      boxShadow: `inset 0 0 0 1px ${"#ffffff4d"}`,
-                    }}
-                  />
-
-                  <label className="sr-only" htmlFor="email">
-                    Work email
-                  </label>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    placeholder="Work email"
-                    required
-                    className="rounded-xl border-0 px-4 py-3 placeholder-gray-600 focus:outline-none focus:ring-2"
-                    style={{
-                      backgroundColor: "#fff",
-                      color: "#000",
-                      boxShadow: `inset 0 0 0 1px ${"#ffffff4d"}`,
-                    }}
-                  />
-
-                  {/* Services group (accessible fieldset/legend) */}
-                  <fieldset
-                    className="mt-2 rounded-xl p-3"
-                    style={{ border: "1px solid #ffffff4d" }}
-                  >
-                    <legend className="px-1 text-sm" style={{ color: "#fff" }}>
-                      Which services are you interested in?
-                    </legend>
-                    <div className="mt-2 grid gap-2">
-                      {listedServices.map((s) => (
-                        <label
-                          key={s}
-                          className="flex gap-2 items-start"
-                          style={{ color: "#fff" }}
-                        >
-                          <input
-                            type="checkbox"
-                            name="services"
-                            value={s}
-                            className="mt-1 h-4 w-4"
-                            // Native checkbox → works without JS; visible against dark bg
-                            style={{ accentColor: CTA }} // modern browsers
-                          />
-                          <span>{s}</span>
-                        </label>
-                      ))}
-                    </div>
-                    <div className="mt-3">
-                      <label
-                        htmlFor="other"
-                        className="block text-sm"
-                        style={{ color: "#fff" }}
-                      >
-                        Other services
-                      </label>
-                      <input
-                        id="other"
-                        name="other"
-                        placeholder="Please specify (optional)"
-                        className="mt-1 w-full rounded-lg border-0 px-3 py-2 placeholder-gray-700 focus:outline-none focus:ring-2"
-                        style={{
-                          backgroundColor: "#fff",
-                          color: "#000",
-                          boxShadow: `inset 0 0 0 1px ${"#ffffff4d"}`,
-                        }}
-                      />
-                    </div>
-                  </fieldset>
-
-                  <label htmlFor="notes" className="sr-only">
-                    Notes
-                  </label>
-                  <textarea
-                    id="notes"
-                    name="notes"
-                    placeholder="Tell us about your setup or timeline (optional)"
-                    className="rounded-xl border-0 px-4 py-3 placeholder-gray-600 focus:outline-none focus:ring-2"
-                    style={{
-                      backgroundColor: "#fff",
-                      color: "#000",
-                      boxShadow: `inset 0 0 0 1px ${"#ffffff4d"}`,
-                    }}
-                    rows={3}
-                  />
-
-                  <button
-                    className="mt-2 inline-flex items-center justify-center rounded-xl px-5 py-3 font-semibold focus:outline-none focus:ring-2"
-                    style={{ backgroundColor: CTA, color: "#fff" }}
-                  >
-                    Request a callback
-                  </button>
-                  <p className="text-xs" style={{ color: "#f5d9ff" }}>
-                    By submitting, you agree to be contacted about business
-                    services.
-                  </p>
-                </form>
-              )}
+              <SohoLeadForm
+                action={submitLead}
+                brand={BRAND}
+                cta={CTA}
+                success={SUCCESS}
+                listedServices={listedServices}
+                plans={plans.map((p) => p.name)}
+              />
             </div>
 
             <div className="relative h-64 w-full lg:h-80">
@@ -649,6 +505,19 @@ export default function SohoPage({
         </div>
       </section>
 
+      {/* Plan click -> localStorage + CustomEvent; form listens and updates immediately */}
+      <Script id="plan-select" strategy="afterInteractive">{`
+        document.addEventListener('click', function(e){
+          const a = e.target.closest('a[data-plan]');
+          if (!a) return;
+          const plan = a.getAttribute('data-plan') || '';
+          try {
+            localStorage.setItem('selectedPlan', plan);
+            window.dispatchEvent(new CustomEvent('plan:select', { detail: { plan } }));
+          } catch {}
+        });
+      `}</Script>
+
       {/* JSON-LD */}
       <script
         type="application/ld+json"
@@ -659,7 +528,7 @@ export default function SohoPage({
             name: "SOHO Bundles",
             description:
               "Internet + mobile bundles for small office and home office customers.",
-            url: "https://www.example.com/soho",
+            url: "https://www.example.com/",
             hasOfferCatalog: {
               "@type": "OfferCatalog",
               name: "SOHO Plans",
