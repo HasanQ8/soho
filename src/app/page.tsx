@@ -400,8 +400,9 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Hero image: hidden on mobile, visible on lg and up */}
           <div
-            className="relative mt-10 h-64 w-full max-w-xl self-end rounded-3xl p-4 shadow-lg lg:mt-0"
+            className="hidden lg:block relative mt-10 h-64 w-full max-w-xl self-end rounded-3xl p-4 shadow-lg lg:mt-0"
             style={{ backgroundColor: "#ffffffb3" }}
           >
             <Image
@@ -557,8 +558,6 @@ export default function Home() {
                   type="button"
                   onClick={() => {
                     toggleService(s.title);
-                    // Optional: auto-scroll to contact when selecting
-                    // document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
                   }}
                   aria-pressed={active}
                   className="w-full rounded-xl border p-4 text-left text-sm transition-shadow"
@@ -929,7 +928,8 @@ export default function Home() {
               </form>
             </div>
 
-            <div className="relative h-64 w-full lg:h-80">
+            {/* Contact image: hidden on mobile, visible on lg and up */}
+            <div className="hidden lg:block relative h-64 w-full lg:h-80">
               <Image
                 src="/soho/hero-dashboard.png"
                 alt="Business team call"
@@ -1077,7 +1077,17 @@ export default function Home() {
                 <div className="mt-4">
                   <p className="text-sm font-medium mb-2">Choose a time</p>
                   <div className="grid grid-cols-3 gap-2">
-                    {hourSlots.map((t) => {
+                    {[
+                      "09:00",
+                      "10:00",
+                      "11:00",
+                      "12:00",
+                      "13:00",
+                      "14:00",
+                      "15:00",
+                      "16:00",
+                      "17:00",
+                    ].map((t) => {
                       const active = aptTime === t;
                       return (
                         <button
