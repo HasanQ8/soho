@@ -1,28 +1,11 @@
-import type { Metadata } from "next";
-import Image from "next/image";
-import Script from "next/script";
-import SohoLeadForm from "../components/SohoLeadForm"; // Client Component with useActionState/useFormStatus
+// app/page.tsx (or src/app/page.tsx)
+"use client";
 
-// ---------- SEO ----------
-export const metadata: Metadata = {
-  title: "SOHO Solutions | stc – Small Office / Home Office (Revamp)",
-  description:
-    "Request SOHO services like Fiber Link, Business Professional, Maktabi, Toll-free 800, UAN 9200, DIA and more. Fast install, simple bundles, priority support.",
-  alternates: { canonical: "/" },
-  openGraph: {
-    title: "SOHO Solutions | stc – Small Office / Home Office (Revamp)",
-    description:
-      "Request SOHO services—Fiber Link, Business Professional, Maktabi, DIA and more—with fast install and priority support.",
-    url: "https://www.example.com/",
-    siteName: "stc (revamp)",
-    images: [{ url: "/soho/Soho.png", width: 1200, height: 630 }],
-    locale: "en_US",
-    type: "website",
-  },
-};
+import * as React from "react";
+import Image from "next/image";
 
 // ---------- Settings (colors) ----------
-const BRAND = "#4f008c"; // main stc color
+const BRAND = "#4f008c"; // stc purple
 const CTA = "#ff375e"; // buttons
 const SUCCESS = "#16a34a"; // success green
 
@@ -69,8 +52,6 @@ const listedServicesList = [
       "Bundle that pairs a Sunmi POS device with a 5GB business SIM—available on 12/24-month contracts for a streamlined retail setup.",
   },
 ];
-
-// titles-only array for checkboxes in the form
 const listedServices = listedServicesList.map((s) => s.title);
 
 const plans = [
@@ -138,6 +119,40 @@ const benefits = [
     title: "Self-serve portal",
     desc: "Manage users, SIMs, add-ons and invoices in one place.",
     icon: "settings",
+  },
+];
+
+// Industry cards + details (More details modal content)
+const industries = [
+  {
+    title: "Architects & Designer",
+    tagline: "Stop missing important client calls",
+    details: [
+      "Unified communication (desk phone + mobile + softphone)",
+      "Auto-attendant & smart routing (site/office, time-of-day)",
+      "Call logs & lightweight CRM notes for approvals/sign-offs",
+      "Project hotlines & hunt groups for active sites",
+      "Optional call recording to capture change requests",
+    ],
+    comingSoon: false,
+  },
+  {
+    title: "Salons & Spas",
+    tagline: "Give your clients the premium experience they deserve",
+    details: [
+      "Online booking with automatic reminders (SMS/WhatsApp)",
+      "Loyalty & membership management (points, tiers, vouchers)",
+      "POS + payment, with optional cashback promotions",
+      "Multi-staff scheduling & no-show reduction tools",
+      "Branded booking microsite with Instagram integration",
+    ],
+    comingSoon: false,
+  },
+  {
+    title: "Content Creators",
+    tagline: "Never let your connectivity slow down your creativity",
+    details: [],
+    comingSoon: true, // “More details” disabled; shows Coming soon
   },
 ];
 
@@ -214,39 +229,122 @@ function Icon({
   }
 }
 
-// ---------- Server Action (state-returning for useActionState) ----------
-export async function submitLead(
-  prevState: { ok: boolean; error?: string | null },
-  formData: FormData
-) {
-  "use server";
-
-  // Honeypot
-  if ((formData.get("hp_trap") as string)?.trim()) {
-    return { ok: true as const, error: null };
-  }
-
-  const name = String(formData.get("name") || "");
-  const phone = String(formData.get("phone") || "");
-  const email = String(formData.get("email") || "");
-  const plan = String(formData.get("plan") || "");
-  const services = formData.getAll("services").map(String);
-  const other = String(formData.get("other") || "");
-  const notes = String(formData.get("notes") || "");
-
-  if (!name || !phone || !email) {
-    return {
-      ok: false as const,
-      error: "Please fill name, phone and work email.",
-    };
-  }
-
-  // TODO: Persist to DB/CRM or send email (includes plan + services)
-  return { ok: true as const, error: null };
-}
-
-// ---------- Page ----------
+// ---------- Page (Client) ----------
 export default function Home() {
+  // form + UI state
+  const [pending, setPending] = React.useState(false);
+  const [ok, setOk] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  // selections
+  const [selectedPlan, setSelectedPlan] = React.useState("");
+  const [selectedIndustries, setSelectedIndustries] = React.useState<
+    Set<string>
+  >(new Set());
+  const [selectedServices, setSelectedServices] = React.useState<Set<string>>(
+    new Set()
+  );
+
+  // appointment
+  const [aptOpen, setAptOpen] = React.useState(false);
+  const [aptDate, setAptDate] = React.useState("");
+  const [aptTime, setAptTime] = React.useState("");
+
+  // industry details modal
+  const [industryModalOpen, setIndustryModalOpen] = React.useState<
+    string | null
+  >(null);
+
+  const hourSlots = [
+    "09:00",
+    "10:00",
+    "11:00",
+    "12:00",
+    "13:00",
+    "14:00",
+    "15:00",
+    "16:00",
+    "17:00",
+  ];
+
+  // helpers
+  const toggleIndustry = (ind: string) =>
+    setSelectedIndustries((prev) => {
+      const next = new Set(prev);
+      next.has(ind) ? next.delete(ind) : next.add(ind);
+      return next;
+    });
+
+  const toggleService = (svc: string) =>
+    setSelectedServices((prev) => {
+      const next = new Set(prev);
+      next.has(svc) ? next.delete(svc) : next.add(svc);
+      return next;
+    });
+
+  function validate(fd: FormData) {
+    const name = String(fd.get("name") || "").trim();
+    const phone = String(fd.get("phone") || "").trim();
+    const email = String(fd.get("email") || "").trim();
+    if (!name) return "Please enter your full name.";
+    if (!phone || phone.replace(/\D/g, "").length < 8)
+      return "Please enter a valid phone number.";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      return "Please enter a valid work email.";
+    return null;
+  }
+
+  function resetAll(formEl: HTMLFormElement) {
+    try {
+      formEl.reset();
+    } catch {}
+    setSelectedPlan("");
+    setSelectedIndustries(new Set());
+    setSelectedServices(new Set());
+    setAptDate("");
+    setAptTime("");
+  }
+
+  // click handlers
+  function onPlanCardClick(name: string) {
+    setSelectedPlan(name);
+    document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  function onIndustryTalk(title: string) {
+    setSelectedIndustries((prev) => new Set(prev).add(title));
+    document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setOk(false);
+    setPending(true);
+
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+
+    // mirror client selections into fd (useful if you wire a backend later)
+    fd.set("plan", selectedPlan);
+    selectedIndustries.forEach((ind) => fd.append("industries", ind));
+    selectedServices.forEach((svc) => fd.append("services", svc));
+    if (aptDate) fd.set("appointmentDate", aptDate);
+    if (aptTime) fd.set("appointmentTime", aptTime);
+
+    const err = validate(fd);
+    if (err) {
+      setPending(false);
+      setError(err);
+      return;
+    }
+
+    // success (client-side only)
+    setPending(false);
+    setOk(true);
+    resetAll(form);
+  }
+
   return (
     <main className="min-h-screen bg-white text-black">
       {/* HERO */}
@@ -307,7 +405,7 @@ export default function Home() {
             style={{ backgroundColor: "#ffffffb3" }}
           >
             <Image
-              src="/soho/Soho.png"
+              src="/soho/Soho1.png"
               alt="SOHO dashboard preview"
               fill
               sizes="(min-width: 1024px) 480px, 100vw"
@@ -351,7 +449,85 @@ export default function Home() {
         </div>
       </section>
 
-      {/* SERVICES — titles + descriptions */}
+      {/* INDUSTRY PACKAGES */}
+      <section
+        className="mx-auto max-w-7xl px-6 py-6"
+        aria-labelledby="industry-heading"
+      >
+        <h2
+          id="industry-heading"
+          className="text-2xl font-bold"
+          style={{ color: "#000" }}
+        >
+          Industry packages
+        </h2>
+        <p className="mt-2" style={{ color: "#374151" }}>
+          Ready-made bundles tailored for popular small-business verticals.
+        </p>
+
+        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {industries.map((card) => (
+            <article
+              key={card.title}
+              className="rounded-3xl p-6 shadow-sm flex flex-col"
+              style={{
+                backgroundColor: "#fff",
+                color: "#000",
+                border: "1px solid #e5e7eb",
+              }}
+            >
+              <header className="mb-3">
+                <h3 className="text-lg font-semibold">{card.title}</h3>
+                <p className="mt-1 text-sm" style={{ color: "#6b7280" }}>
+                  {card.tagline}
+                </p>
+              </header>
+
+              <div className="mt-auto flex gap-2">
+                {card.comingSoon ? (
+                  <button
+                    type="button"
+                    disabled
+                    title="Coming soon"
+                    className="rounded-xl px-4 py-2 font-semibold opacity-60 cursor-not-allowed ring-1"
+                    style={{
+                      color: "#000",
+                      borderColor: "#d1d5db",
+                      backgroundColor: "transparent",
+                    }}
+                  >
+                    Coming soon
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIndustryModalOpen(card.title)}
+                    className="rounded-xl px-4 py-2 ring-1"
+                    style={{
+                      color: "#4f008c",
+                      borderColor: "#d1d5db",
+                      backgroundColor: "transparent",
+                    }}
+                  >
+                    More details
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => onIndustryTalk(card.title)}
+                  className="rounded-xl px-4 py-2 font-semibold"
+                  style={{ backgroundColor: CTA, color: "#fff" }}
+                >
+                  Talk to sales
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {/* SERVICES — clickable + synced with form */}
       <section
         id="services"
         className="mx-auto max-w-7xl px-6 py-14"
@@ -365,27 +541,42 @@ export default function Home() {
           Popular SOHO services
         </h2>
         <p className="mt-2" style={{ color: "#374151" }}>
-          Select the services you need in the form below—we’ll tailor the bundle
-          for you.
+          Click to select services; your choices will appear pre-checked in the
+          form below.
         </p>
 
-        <ul className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {listedServicesList.map((s) => (
-            <li
-              key={s.title}
-              className="rounded-xl border p-4 text-sm"
-              style={{
-                borderColor: "#e5e7eb",
-                backgroundColor: "#fff",
-                color: "#000",
-              }}
-            >
-              <span className="font-medium">{s.title}</span>
-              <span className="block" style={{ color: "#6b7280" }}>
-                {s.description}
-              </span>
-            </li>
-          ))}
+        <ul
+          className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          role="list"
+        >
+          {listedServicesList.map((s) => {
+            const active = selectedServices.has(s.title);
+            return (
+              <li key={s.title}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    toggleService(s.title);
+                    // Optional: auto-scroll to contact when selecting
+                    // document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  aria-pressed={active}
+                  className="w-full rounded-xl border p-4 text-left text-sm transition-shadow"
+                  style={{
+                    borderColor: active ? BRAND : "#e5e7eb",
+                    backgroundColor: "#fff",
+                    color: "#000",
+                    boxShadow: active ? `0 0 0 3px ${BRAND}33` : "none",
+                  }}
+                >
+                  <span className="font-medium">{s.title}</span>
+                  <span className="block mt-1" style={{ color: "#6b7280" }}>
+                    {s.description}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       </section>
 
@@ -447,15 +638,14 @@ export default function Home() {
                 ))}
               </ul>
               <div className="mt-6">
-                {/* Click → save plan + broadcast; hash scroll proceeds to #contact */}
-                <a
-                  href="#contact"
-                  data-plan={p.name}
+                <button
+                  type="button"
+                  onClick={() => onPlanCardClick(p.name)}
                   className="inline-flex w-full items-center justify-center rounded-xl px-4 py-3 focus:outline-none focus:ring-2"
                   style={{ backgroundColor: CTA, color: "#fff" }}
                 >
                   {p.cta}
-                </a>
+                </button>
               </div>
               <p className="mt-3 text-xs" style={{ color: "#6b7280" }}>
                 Prices in SAR. VAT may apply. Terms subject to change.
@@ -465,7 +655,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* CONTACT — form lives in Client Component (useActionState/useFormStatus) */}
+      {/* CONTACT */}
       <section id="contact" className="relative mx-auto max-w-7xl px-6 pb-24">
         <div
           className="overflow-hidden rounded-3xl"
@@ -483,14 +673,260 @@ export default function Home() {
                 you shortly.
               </p>
 
-              <SohoLeadForm
-                action={submitLead}
-                brand={BRAND}
-                cta={CTA}
-                success={SUCCESS}
-                listedServices={listedServices}
-                plans={plans.map((p) => p.name)}
-              />
+              <form
+                className="mt-6 grid gap-3 sm:max-w-md"
+                onSubmit={onSubmit}
+                noValidate
+              >
+                {error && (
+                  <div
+                    className="rounded-xl p-3"
+                    style={{ backgroundColor: "#fff3c4", color: "#7a4d00" }}
+                  >
+                    {error}
+                  </div>
+                )}
+
+                {/* Honeypot */}
+                <div aria-hidden className="hidden">
+                  <label htmlFor="hp_trap">Company Website</label>
+                  <input id="hp_trap" name="hp_trap" />
+                </div>
+
+                <label className="sr-only" htmlFor="name">
+                  Name
+                </label>
+                <input
+                  id="name"
+                  name="name"
+                  placeholder="Full name"
+                  required
+                  className="rounded-xl border-0 px-4 py-3 placeholder-gray-600 focus:outline-none focus:ring-2"
+                  style={{
+                    backgroundColor: "#fff",
+                    color: "#000",
+                    boxShadow: "inset 0 0 0 1px #ffffff4d",
+                  }}
+                />
+
+                <label className="sr-only" htmlFor="phone">
+                  Phone
+                </label>
+                <input
+                  id="phone"
+                  name="phone"
+                  placeholder="Phone"
+                  required
+                  className="rounded-xl border-0 px-4 py-3 placeholder-gray-600 focus:outline-none focus:ring-2"
+                  style={{
+                    backgroundColor: "#fff",
+                    color: "#000",
+                    boxShadow: "inset 0 0 0 1px #ffffff4d",
+                  }}
+                />
+
+                <label className="sr-only" htmlFor="email">
+                  Work email
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="Work email"
+                  required
+                  className="rounded-xl border-0 px-4 py-3 placeholder-gray-600 focus:outline-none focus:ring-2"
+                  style={{
+                    backgroundColor: "#fff",
+                    color: "#000",
+                    boxShadow: "inset 0 0 0 1px #ffffff4d",
+                  }}
+                />
+
+                {/* Preferred plan */}
+                <div>
+                  <label
+                    htmlFor="plan"
+                    className="block text-sm mb-1"
+                    style={{ color: "#fff" }}
+                  >
+                    Preferred plan
+                  </label>
+                  <select
+                    id="plan"
+                    name="plan"
+                    value={selectedPlan}
+                    onChange={(e) => setSelectedPlan(e.target.value)}
+                    className="w-full rounded-xl border-0 px-4 py-3 focus:outline-none focus:ring-2"
+                    style={{
+                      backgroundColor: "#fff",
+                      color: "#000",
+                      boxShadow: "inset 0 0 0 1px #ffffff4d",
+                    }}
+                  >
+                    <option value="">No preference</option>
+                    {plans.map((p) => (
+                      <option key={p.name} value={p.name}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Services (checkboxes reflect service-card selections) */}
+                <fieldset
+                  className="mt-2 rounded-xl p-3"
+                  style={{ border: "1px solid #ffffff4d" }}
+                >
+                  <legend className="px-1 text-sm" style={{ color: "#fff" }}>
+                    Which services are you interested in?
+                  </legend>
+                  <div className="mt-2 grid gap-2">
+                    {listedServices.map((s) => (
+                      <label
+                        key={s}
+                        className="flex gap-2 items-start"
+                        style={{ color: "#fff" }}
+                      >
+                        <input
+                          type="checkbox"
+                          name="services"
+                          value={s}
+                          checked={selectedServices.has(s)}
+                          onChange={() => toggleService(s)}
+                          className="mt-1 h-4 w-4"
+                          style={{ accentColor: CTA }}
+                        />
+                        <span>{s}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+
+                {/* Industries (Talk to sales auto-ticks) */}
+                <fieldset
+                  className="mt-2 rounded-xl p-3"
+                  style={{ border: "1px solid #ffffff4d" }}
+                >
+                  <legend className="px-1 text-sm" style={{ color: "#fff" }}>
+                    Your industry (select all that apply)
+                  </legend>
+                  <div className="mt-2 grid gap-2">
+                    {industries.map((ind) => (
+                      <label
+                        key={ind.title}
+                        className="flex gap-2 items-start"
+                        style={{ color: "#fff" }}
+                      >
+                        <input
+                          type="checkbox"
+                          name="industries"
+                          value={ind.title}
+                          checked={selectedIndustries.has(ind.title)}
+                          onChange={() => toggleIndustry(ind.title)}
+                          className="mt-1 h-4 w-4"
+                          style={{ accentColor: CTA }}
+                        />
+                        <span>{ind.title}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+
+                <div className="mt-3">
+                  <label
+                    htmlFor="other"
+                    className="block text-sm"
+                    style={{ color: "#fff" }}
+                  >
+                    Other services
+                  </label>
+                  <input
+                    id="other"
+                    name="other"
+                    placeholder="Please specify (optional)"
+                    className="mt-1 w-full rounded-lg border-0 px-3 py-2 placeholder-gray-700 focus:outline-none focus:ring-2"
+                    style={{
+                      backgroundColor: "#fff",
+                      color: "#000",
+                      boxShadow: "inset 0 0 0 1px #ffffff4d",
+                    }}
+                  />
+                </div>
+
+                <label htmlFor="notes" className="sr-only">
+                  Notes
+                </label>
+                <textarea
+                  id="notes"
+                  name="notes"
+                  rows={3}
+                  placeholder="Tell us about your setup or timeline (optional)"
+                  className="rounded-xl border-0 px-4 py-3 placeholder-gray-600 focus:outline-none focus:ring-2"
+                  style={{
+                    backgroundColor: "#fff",
+                    color: "#000",
+                    boxShadow: "inset 0 0 0 1px #ffffff4d",
+                  }}
+                />
+
+                {(aptDate || aptTime) && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {aptDate && (
+                      <span
+                        className="rounded-full px-3 py-1 text-sm"
+                        style={{
+                          backgroundColor: "#ffffff",
+                          color: "#000",
+                          boxShadow: "inset 0 0 0 1px #e5e7eb",
+                        }}
+                      >
+                        Date: {aptDate}
+                      </span>
+                    )}
+                    {aptTime && (
+                      <span
+                        className="rounded-full px-3 py-1 text-sm"
+                        style={{
+                          backgroundColor: "#ffffff",
+                          color: "#000",
+                          boxShadow: "inset 0 0 0 1px #e5e7eb",
+                        }}
+                      >
+                        Time: {aptTime}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Appointment FIRST */}
+                <button
+                  type="button"
+                  onClick={() => setAptOpen(true)}
+                  className="mt-2 inline-flex items-center justify-center rounded-xl px-5 py-3 font-semibold ring-1 focus:outline-none focus:ring-2"
+                  style={{ color: "#fff", borderColor: "#ffffff66" }}
+                >
+                  Book an appointment
+                </button>
+
+                {/* Submit */}
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className="mt-2 inline-flex items-center justify-center rounded-xl px-5 py-3 font-semibold focus:outline-none focus:ring-2 disabled:opacity-70"
+                  style={{ backgroundColor: CTA, color: "#fff" }}
+                >
+                  {pending ? "Submitting…" : "Request a callback"}
+                </button>
+
+                <p className="text-xs" style={{ color: "#f5d9ff" }}>
+                  By submitting, you agree to be contacted about business
+                  services.
+                </p>
+
+                {/* Hidden mirrors (future backend) */}
+                <input type="hidden" name="appointmentDate" value={aptDate} />
+                <input type="hidden" name="appointmentTime" value={aptTime} />
+              </form>
             </div>
 
             <div className="relative h-64 w-full lg:h-80">
@@ -505,44 +941,250 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Plan click -> localStorage + CustomEvent; form listens and updates immediately */}
-      <Script id="plan-select" strategy="afterInteractive">{`
-        document.addEventListener('click', function(e){
-          const a = e.target.closest('a[data-plan]');
-          if (!a) return;
-          const plan = a.getAttribute('data-plan') || '';
-          try {
-            localStorage.setItem('selectedPlan', plan);
-            window.dispatchEvent(new CustomEvent('plan:select', { detail: { plan } }));
-          } catch {}
-        });
-      `}</Script>
+      {/* INDUSTRY DETAILS MODAL */}
+      {industryModalOpen && (
+        <>
+          <div
+            aria-hidden
+            className="fixed inset-0 z-[9998]"
+            style={{ background: "rgba(79, 0, 140, 0.35)" }}
+            onClick={() => setIndustryModalOpen(null)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="industry-modal-title"
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+          >
+            <div
+              className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                className="px-5 py-3"
+                style={{ backgroundColor: BRAND, color: "#fff" }}
+              >
+                <div className="flex items-center justify-between">
+                  <h3
+                    id="industry-modal-title"
+                    className="text-base font-semibold"
+                  >
+                    {industryModalOpen}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setIndustryModalOpen(null)}
+                    className="rounded px-2 py-1 font-semibold"
+                    style={{ backgroundColor: "#ffffff22", color: "#fff" }}
+                    aria-label="Close"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
 
-      {/* JSON-LD */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "ProductCollection",
-            name: "SOHO Bundles",
-            description:
-              "Internet + mobile bundles for small office and home office customers.",
-            url: "https://www.example.com/",
-            hasOfferCatalog: {
-              "@type": "OfferCatalog",
-              name: "SOHO Plans",
-              itemListElement: plans.map((p) => ({
-                "@type": "Offer",
-                name: p.name,
-                price: p.price,
-                priceCurrency: "SAR",
-                category: "TelecommunicationsService",
-              })),
-            },
-          }),
-        }}
-      />
+              <div className="px-5 py-4" style={{ color: "#000" }}>
+                {industries
+                  .filter((c) => c.title === industryModalOpen)
+                  .map((c) =>
+                    c.details.length ? (
+                      <ul key={c.title} className="list-disc pl-5 space-y-2">
+                        {c.details.map((d) => (
+                          <li key={d}>{d}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p
+                        key={c.title}
+                        className="text-sm"
+                        style={{ color: "#6b7280" }}
+                      >
+                        More details will be available soon.
+                      </p>
+                    )
+                  )}
+                <div className="mt-6 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setIndustryModalOpen(null)}
+                    className="rounded-xl px-4 py-2 font-semibold"
+                    style={{ backgroundColor: CTA, color: "#fff" }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* APPOINTMENT MODAL */}
+      {aptOpen && (
+        <>
+          <div
+            aria-hidden
+            className="fixed inset-0 z-40"
+            style={{ background: "rgba(79, 0, 140, 0.35)" }}
+            onClick={() => setAptOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="apt-title"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
+            <div
+              className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                className="px-5 py-3"
+                style={{ backgroundColor: BRAND, color: "#fff" }}
+              >
+                <div className="flex items-center justify-between">
+                  <h3 id="apt-title" className="text-base font-semibold">
+                    Book an appointment
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setAptOpen(false)}
+                    className="rounded px-2 py-1 font-semibold"
+                    style={{ backgroundColor: "#ffffff22", color: "#fff" }}
+                    aria-label="Close"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              <div className="px-5 py-4" style={{ color: "#000" }}>
+                <label
+                  htmlFor="apt-date"
+                  className="block text-sm font-medium mb-1"
+                >
+                  Choose a date
+                </label>
+                <input
+                  id="apt-date"
+                  type="date"
+                  className="w-full rounded-lg border px-3 py-2"
+                  value={aptDate}
+                  onChange={(e) => setAptDate(e.target.value)}
+                  min={new Date().toISOString().slice(0, 10)}
+                />
+
+                <div className="mt-4">
+                  <p className="text-sm font-medium mb-2">Choose a time</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {hourSlots.map((t) => {
+                      const active = aptTime === t;
+                      return (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setAptTime(t)}
+                          className="rounded-lg px-3 py-2 text-sm ring-1"
+                          style={{
+                            backgroundColor: active ? BRAND : "#fff",
+                            color: active ? "#fff" : "#000",
+                            borderColor: active ? BRAND : "#d1d5db",
+                          }}
+                          aria-pressed={active}
+                        >
+                          {t}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="mt-6 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    className="rounded-xl px-4 py-2 ring-1"
+                    style={{ color: "#000", borderColor: "#d1d5db" }}
+                    onClick={() => setAptOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-xl px-4 py-2 font-semibold"
+                    style={{ backgroundColor: CTA, color: "#fff" }}
+                    onClick={() => aptDate && aptTime && setAptOpen(false)}
+                  >
+                    Confirm appointment
+                  </button>
+                </div>
+
+                <p className="mt-3 text-xs" style={{ color: "#6b7280" }}>
+                  Your selected appointment will be submitted along with the
+                  form.
+                </p>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* SUCCESS POPUP */}
+      {ok && (
+        <>
+          <div
+            aria-hidden
+            className="fixed inset-0 z-40"
+            style={{ background: "rgba(79, 0, 140, 0.35)" }}
+            onClick={() => setOk(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="success-title"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          >
+            <div
+              className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                className="px-5 py-3"
+                style={{ backgroundColor: BRAND, color: "#fff" }}
+              >
+                <h3 id="success-title" className="text-base font-semibold">
+                  Request received
+                </h3>
+              </div>
+              <div className="px-5 py-4" style={{ color: "#000" }}>
+                <div className="flex items-center gap-3">
+                  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
+                    <circle cx="12" cy="12" r="10" fill={SUCCESS} />
+                    <path
+                      d="M7 12.5l3 3 7-7"
+                      stroke="#fff"
+                      strokeWidth="2"
+                      fill="none"
+                    />
+                  </svg>
+                  <p className="font-medium">
+                    We’ve received your request and will contact you shortly.
+                  </p>
+                </div>
+                <div className="mt-5 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setOk(false)}
+                    className="rounded-xl px-4 py-2 font-semibold"
+                    style={{ backgroundColor: CTA, color: "#fff" }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </main>
   );
 }
