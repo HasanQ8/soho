@@ -156,6 +156,15 @@ const industries = [
   },
 ];
 
+const ALL_INDUSTRIES = [
+  ...industries.map((i) => i.title),
+  "Retail",
+  "Cafes & Restaurants",
+  "Clinics",
+  "Construction",
+  "Other",
+];
+
 // ---------- Icons ----------
 function Icon({
   name,
@@ -255,6 +264,20 @@ export default function Home() {
     string | null
   >(null);
 
+  // Customize-bundle modal
+  const [customizeOpen, setCustomizeOpen] = React.useState(false);
+  const [customIndustrySelect, setCustomIndustrySelect] = React.useState(
+    ALL_INDUSTRIES[0]
+  );
+  const [customIndustryOther, setCustomIndustryOther] = React.useState("");
+  const [customDesc, setCustomDesc] = React.useState("");
+  const [customResult, setCustomResult] = React.useState<null | {
+    title: string;
+    plan: string;
+    services: string[];
+    blurb: string;
+  }>(null);
+
   const hourSlots = [
     "09:00",
     "10:00",
@@ -313,6 +336,161 @@ export default function Home() {
 
   function onIndustryTalk(title: string) {
     setSelectedIndustries((prev) => new Set(prev).add(title));
+    document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  function openCustomizeWith(industry?: string) {
+    setCustomizeOpen(true);
+    setCustomResult(null);
+    setCustomDesc("");
+    if (industry && ALL_INDUSTRIES.includes(industry)) {
+      setCustomIndustrySelect(industry);
+    } else {
+      setCustomIndustrySelect(ALL_INDUSTRIES[0]);
+    }
+    setCustomIndustryOther("");
+  }
+
+  function generateStaticBundle(industry: string, desc: string) {
+    // Decide a sensible default plan per industry + services (static rules)
+    const d = desc.toLowerCase();
+    const needsSpeed = /upload|video|stream|render|large file|backup/.test(d);
+    const needsPhones =
+      /call|phone|hotline|attendant|ivr|inbound|routing|missed/.test(d);
+    const wantsPayments = /pos|payment|checkout|cashback|loyalty/.test(d);
+    const wantsBooking = /book|appointment|schedule|calendar|no-?show/.test(d);
+    const wantsStaticIP = /static ip|vpn|remote|cctv|server|hosting/.test(d);
+
+    const SVC = {
+      FIBER: "Fiber Link",
+      MAK5G: "Maktabi packages",
+      DIA: "Dedicated Internet Access (DIA)",
+      PRO: "Business Professional",
+      UAN: "Universal Access Number 9200",
+      TOLL: "Toll free service 800",
+      POS: "Sunmi POS with 5GB SIM",
+      MAK5G_MAZ: "Maktabi 5G (Mazaya Platform)",
+    } as const;
+
+    // Base suggestion per industry
+    let plan = "Growth";
+    let services: string[] = [SVC.FIBER, SVC.PRO];
+
+    switch (industry) {
+      case "Architects & Designer":
+        plan = needsSpeed ? "Pro" : "Growth";
+        services = [
+          needsSpeed ? SVC.DIA : SVC.FIBER,
+          SVC.PRO,
+          SVC.UAN,
+          wantsStaticIP ? SVC.DIA : SVC.MAK5G, // static IP often comes with DIA; otherwise show a wireless alt
+        ];
+        break;
+      case "Salons & Spas":
+        plan = wantsBooking ? "Growth" : "Starter";
+        services = [
+          SVC.MAK5G,
+          SVC.PRO,
+          wantsBooking ? SVC.UAN : SVC.TOLL,
+          wantsPayments ? SVC.POS : SVC.MAK5G_MAZ,
+        ];
+        break;
+      case "Content Creators":
+        plan = needsSpeed ? "Pro" : "Growth";
+        services = [needsSpeed ? SVC.DIA : SVC.FIBER, SVC.PRO, SVC.MAK5G_MAZ];
+        break;
+      case "Retail":
+        plan = wantsPayments ? "Growth" : "Starter";
+        services = [SVC.MAK5G, SVC.PRO, SVC.POS, SVC.TOLL];
+        break;
+      case "Cafes & Restaurants":
+        plan = "Growth";
+        services = [SVC.MAK5G, SVC.PRO, SVC.POS, SVC.UAN];
+        break;
+      case "Clinics":
+        plan = wantsBooking ? "Growth" : "Starter";
+        services = [
+          SVC.FIBER,
+          SVC.PRO,
+          SVC.UAN,
+          wantsBooking ? SVC.TOLL : SVC.MAK5G_MAZ,
+        ];
+        break;
+      case "Construction":
+        plan = "Growth";
+        services = [SVC.MAK5G_MAZ, SVC.PRO, SVC.UAN];
+        break;
+      default:
+        // Other / unknown → safe, broadly useful defaults
+        plan = "Growth";
+        services = [SVC.FIBER, SVC.PRO, wantsStaticIP ? SVC.DIA : SVC.MAK5G];
+    }
+
+    // De-dup + keep only known services
+    const normalized = Array.from(
+      new Set(services.filter((s) => listedServices.includes(s)))
+    );
+
+    // Short blurb
+    const blurb = [
+      `Optimized for ${industry}.`,
+      needsSpeed
+        ? "High upstream capacity for uploads and live collaboration."
+        : "Reliable connectivity suitable for day-to-day operations.",
+      needsPhones
+        ? "Includes smart call handling to reduce missed enquiries."
+        : "Mobile lines and self-serve tools keep costs predictable.",
+      wantsPayments ? "POS and loyalty-ready add-ons." : "",
+      wantsBooking ? "Supports booking flows and reminders." : "",
+      wantsStaticIP ? "Static IP / VPN ready for remote access." : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return {
+      title: `${industry} — Recommended bundle`,
+      plan,
+      services: normalized,
+      blurb,
+    };
+  }
+
+  function handleGenerateBundle() {
+    const industry =
+      customIndustrySelect === "Other" && customIndustryOther.trim()
+        ? customIndustryOther.trim()
+        : customIndustrySelect;
+
+    const res = generateStaticBundle(industry, customDesc);
+    setCustomResult(res);
+  }
+
+  function applyBundleToForm() {
+    if (!customResult) return;
+    // Add industry
+    const industryName =
+      customIndustrySelect === "Other" && customIndustryOther.trim()
+        ? customIndustryOther.trim()
+        : customIndustrySelect;
+
+    setSelectedIndustries((prev) => {
+      const next = new Set(prev);
+      next.add(industryName);
+      return next;
+    });
+
+    // Set plan
+    setSelectedPlan(customResult.plan);
+
+    // Tick services (merge)
+    setSelectedServices((prev) => {
+      const next = new Set(prev);
+      customResult.services.forEach((s) => next.add(s));
+      return next;
+    });
+
+    setCustomizeOpen(false);
+    setCustomResult(null);
     document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
   }
 
@@ -484,7 +662,7 @@ export default function Home() {
                 </p>
               </header>
 
-              <div className="mt-auto flex gap-2">
+              <div className="mt-auto flex flex-wrap gap-2">
                 {card.comingSoon ? (
                   <button
                     type="button"
@@ -522,9 +700,39 @@ export default function Home() {
                 >
                   Talk to sales
                 </button>
+
+                {/* New: Customize your bundle */}
+                <button
+                  type="button"
+                  onClick={() => openCustomizeWith(card.title)}
+                  className="rounded-xl px-4 py-2 font-semibold"
+                  style={{
+                    backgroundColor: "#fff",
+                    color: BRAND,
+                    boxShadow: "inset 0 0 0 1px #e5e7eb",
+                  }}
+                >
+                  Customize your bundle
+                </button>
               </div>
             </article>
           ))}
+        </div>
+
+        {/* Also show a global customize button if you want */}
+        <div className="mt-6">
+          <button
+            type="button"
+            onClick={() => openCustomizeWith()}
+            className="rounded-xl px-5 py-3 font-semibold"
+            style={{
+              backgroundColor: "#fff",
+              color: BRAND,
+              boxShadow: "inset 0 0 0 1px #e5e7eb",
+            }}
+          >
+            Customize your bundle (any industry)
+          </button>
         </div>
       </section>
 
@@ -801,7 +1009,7 @@ export default function Home() {
                   </div>
                 </fieldset>
 
-                {/* Industries (Talk to sales auto-ticks) */}
+                {/* Industries (Talk to sales / Customize apply will tick) */}
                 <fieldset
                   className="mt-2 rounded-xl p-3"
                   style={{ border: "1px solid #ffffff4d" }}
@@ -810,22 +1018,22 @@ export default function Home() {
                     Your industry (select all that apply)
                   </legend>
                   <div className="mt-2 grid gap-2">
-                    {industries.map((ind) => (
+                    {ALL_INDUSTRIES.filter((i) => i !== "Other").map((ind) => (
                       <label
-                        key={ind.title}
+                        key={ind}
                         className="flex gap-2 items-start"
                         style={{ color: "#fff" }}
                       >
                         <input
                           type="checkbox"
                           name="industries"
-                          value={ind.title}
-                          checked={selectedIndustries.has(ind.title)}
-                          onChange={() => toggleIndustry(ind.title)}
+                          value={ind}
+                          checked={selectedIndustries.has(ind)}
+                          onChange={() => toggleIndustry(ind)}
                           className="mt-1 h-4 w-4"
                           style={{ accentColor: CTA }}
                         />
-                        <span>{ind.title}</span>
+                        <span>{ind}</span>
                       </label>
                     ))}
                   </div>
@@ -1013,6 +1221,171 @@ export default function Home() {
                     Close
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* CUSTOMIZE BUNDLE (Powered by AI) MODAL */}
+      {customizeOpen && (
+        <>
+          <div
+            aria-hidden
+            className="fixed inset-0 z-[9998]"
+            style={{ background: "rgba(79, 0, 140, 0.35)" }}
+            onClick={() => setCustomizeOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="customize-title"
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+          >
+            <div
+              className="w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header with Powered by AI */}
+              <div
+                className="px-5 py-3 flex items-center justify-between"
+                style={{ backgroundColor: BRAND, color: "#fff" }}
+              >
+                <h3 id="customize-title" className="text-base font-semibold">
+                  Customize your bundle
+                </h3>
+                <span
+                  className="text-xs font-semibold rounded-full px-2 py-1"
+                  style={{ backgroundColor: "#ffffff22" }}
+                >
+                  Powered by AI
+                </span>
+              </div>
+
+              <div className="px-5 py-4" style={{ color: "#000" }}>
+                {/* Form controls */}
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="md:col-span-1">
+                    <label className="block text-sm mb-1">Your industry</label>
+                    <select
+                      value={customIndustrySelect}
+                      onChange={(e) => setCustomIndustrySelect(e.target.value)}
+                      className="w-full rounded-lg border px-3 py-2"
+                    >
+                      {ALL_INDUSTRIES.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {customIndustrySelect === "Other" && (
+                    <div className="md:col-span-1">
+                      <label className="block text-sm mb-1">
+                        Specify your industry
+                      </label>
+                      <input
+                        value={customIndustryOther}
+                        onChange={(e) => setCustomIndustryOther(e.target.value)}
+                        placeholder="e.g., Printing studio"
+                        className="w-full rounded-lg border px-3 py-2"
+                      />
+                    </div>
+                  )}
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm mb-1">
+                      What are you struggling with?
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={customDesc}
+                      onChange={(e) => setCustomDesc(e.target.value)}
+                      placeholder="Describe challenges like missed calls, slow uploads, POS/loyalty needs, booking and reminders, static IP/VPN, etc."
+                      className="w-full rounded-lg border px-3 py-2"
+                    />
+                  </div>
+                </div>
+
+                {/* Buttons */}
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    className="rounded-xl px-4 py-2 ring-1"
+                    style={{ color: "#000", borderColor: "#d1d5db" }}
+                    onClick={() => setCustomizeOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-xl px-4 py-2 font-semibold"
+                    style={{ backgroundColor: CTA, color: "#fff" }}
+                    onClick={handleGenerateBundle}
+                  >
+                    Generate
+                  </button>
+                </div>
+
+                {/* Result */}
+                {customResult && (
+                  <div className="mt-6 rounded-2xl border p-4">
+                    <h4 className="text-lg font-semibold">
+                      {customResult.title}
+                    </h4>
+                    <p className="mt-1 text-sm" style={{ color: "#374151" }}>
+                      {customResult.blurb}
+                    </p>
+
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <div>
+                        <div className="text-sm font-medium">
+                          Suggested plan
+                        </div>
+                        <div
+                          className="mt-1 rounded-lg px-3 py-2"
+                          style={{
+                            backgroundColor: "#f9fafb",
+                            color: "#000",
+                            boxShadow: "inset 0 0 0 1px #e5e7eb",
+                          }}
+                        >
+                          {customResult.plan}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">
+                          Recommended services
+                        </div>
+                        <ul className="mt-1 list-disc pl-5 space-y-1">
+                          {customResult.services.map((s) => (
+                            <li key={s}>{s}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        className="rounded-xl px-4 py-2 ring-1"
+                        style={{ color: "#000", borderColor: "#d1d5db" }}
+                        onClick={() => setCustomResult(null)}
+                      >
+                        Regenerate
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-xl px-4 py-2 font-semibold"
+                        style={{ backgroundColor: CTA, color: "#fff" }}
+                        onClick={applyBundleToForm}
+                      >
+                        Apply to form
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
